@@ -1,1 +1,1 @@
-{"name":"isomass-browser","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.mjs"}}
+{"name":"isomass-browser","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.mjs","test:db":"node scripts/test-database.mjs","qa":"node tests/dev-api.mjs"}}

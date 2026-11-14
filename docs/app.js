@@ -1,10 +1,24 @@
 import { compute, edit } from './model.js';
 import {challenges, advanceChallenge, compareScenes, cleanForm, cleanWorkspace, cleanRun} from './learning.js';
+import {RULE_VERSION,SCORE_KEY,SCORE_RULES,cleanBook,cleanName,addResult,resultFor,scoreSummary} from './scoring.js';
+import {replayRun} from './verify-run.js';
+import {createScoreUI} from './score-ui.js';
 const $ = id => document.getElementById(id), STORAGE = 'isomass:browser:v1', COLLECTION = 'isomass:forms:v1';
 let scene, snapshots = [], cursor = 0, saveAvailable = true;
 let comparison = null, referenceName = 'Pinned form', run = null;
 const PROGRESS = 'isomass:challenges:v1';
 let completed = new Set();
+const entry=new URLSearchParams(location.search);
+let scoreBook=cleanBook(null),scoreStorage=true;
+try{scoreBook=cleanBook(JSON.parse(localStorage.getItem(SCORE_KEY)||'null'));}catch{scoreStorage=false;}
+function writeScores(){try{localStorage.setItem(SCORE_KEY,JSON.stringify(scoreBook));scoreStorage=true;}catch{scoreStorage=false;}}
+const scoreUI=createScoreUI({getBook:()=>scoreBook,setName:name=>{scoreBook={...scoreBook,name:cleanName(name)};writeScores();},onReplay:beginChallenge,storageAvailable:()=>scoreStorage});
+const inAttempt=()=>!!run?.attempt&&!run.attempt.finishedAt&&run.step<SCORE_RULES[run.id].steps;
+function recordAction(type,previousSource,target){
+  if(!inAttempt())return;
+  run.attempt.moves+=Number(previousSource!==scene.source);
+  if(run.attempt.actions){run.attempt.actions.push(type==='select'?{type,target}:{type});if(run.attempt.actions.length>1000)run.attempt.actions=null;}
+}
 try {const saved=JSON.parse(localStorage.getItem(PROGRESS)||'[]');if(Array.isArray(saved))completed=new Set(saved.filter(id=>challenges.some(c=>c.id===id)));} catch {}
 import {renderPlot} from "./plot.js";
 function draw() {
@@ -36,18 +50,23 @@ function refresh(message){
     const lesson=challenges.find(c=>c.id===run.id);
     if(run.step===lesson.steps.length){completed.add(run.id);try{localStorage.setItem(PROGRESS,JSON.stringify([...completed]));}catch{}message=`Challenge complete: ${lesson.title}`;}
   }}
+  if(run?.attempt&&run.step===SCORE_RULES[run.id].steps){
+    run.attempt.finishedAt??=Math.max(Date.now(),run.attempt.startedAt);
+    const result=resultFor(run);if(result){scoreBook=addResult(scoreBook,result);writeScores();}
+  }
+  $('scores').textContent=`Scores & leaderboard · ${scoreSummary(scoreBook).total}/300`;
   draw();$('starter-note').textContent='Examples are editable. Undo brings your previous form back.';
   try{localStorage.setItem(STORAGE,JSON.stringify({version:1,...workspaceSnapshot(),challenge:run}));saveAvailable=true;}catch{saveAvailable=false;}
   history.replaceState(null,'',currentLink());announce(message+(saveAvailable?' · Saved in this browser.':' · Storage unavailable; share a link to keep this form.'));
 }
-function commit(source,focus,message){const next=compute(source,focus);if(next.source!==scene.source||next.focus!==scene.focus){snapshots=snapshots.slice(0,cursor+1);snapshots.push({source:next.source,focus:next.focus});if(snapshots.length>512)snapshots.shift();cursor=snapshots.length-1;}scene=next;refresh(message);}
-function select(id){scene=compute(scene.source,id);snapshots[cursor]=snapshot();refresh(`Region ${scene.regions.findIndex(r=>r.id===scene.focus)+1} of ${scene.regions.length} selected · ${scene.active.length} connected ${scene.active.length===1?'region':'regions'}`);}
+function commit(source,focus,message,action){const previous=scene.source,next=compute(source,focus);if(next.source===scene.source&&next.focus===scene.focus){if(!action)refresh(message);return;}snapshots=snapshots.slice(0,cursor+1);snapshots.push({source:next.source,focus:next.focus});if(!inAttempt()&&snapshots.length>512)snapshots.shift();cursor=snapshots.length-1;scene=next;if(action)recordAction(action,previous);refresh(message);}
+function select(id){const previous=scene.source;scene=compute(scene.source,id);snapshots[cursor]=snapshot();recordAction('select',previous,scene.focus);refresh(`Region ${scene.regions.findIndex(r=>r.id===scene.focus)+1} of ${scene.regions.length} selected · ${scene.active.length===1?'1 region':scene.active.length+' regions'} connected`);}
 function act(action){try{
-  if(action==='split')commit(edit(scene.source,'split',scene.focus),scene.focus*2,'Divided. Capacity remains 64');
-  if(action==='merge'){const parent=Math.max(1,Math.floor(scene.focus/2));commit(edit(scene.source,'merge',parent),parent,'Family rejoined. Capacity remains 64');}
-  if(action==='reset')commit('L',1,'Returned to the whole. Undo restores your form');
-  if(action==='undo'&&cursor>0){scene=compute(snapshots[--cursor].source,snapshots[cursor].focus);refresh('Previous form restored');}
-  if(action==='redo'&&cursor<snapshots.length-1){scene=compute(snapshots[++cursor].source,snapshots[cursor].focus);refresh('Next form restored');}
+  if(action==='split')commit(edit(scene.source,'split',scene.focus),scene.focus*2,'Divided. Capacity remains 64',action);
+  if(action==='merge'){const parent=Math.max(1,Math.floor(scene.focus/2));commit(edit(scene.source,'merge',parent),parent,'Family rejoined. Capacity remains 64',action);}
+  if(action==='reset')commit('L',1,'Returned to the whole. Undo restores your form',action);
+  if(action==='undo'&&cursor>0){const previous=scene.source;scene=compute(snapshots[--cursor].source,snapshots[cursor].focus);recordAction(action,previous);refresh('Previous form restored');}
+  if(action==='redo'&&cursor<snapshots.length-1){const previous=scene.source;scene=compute(snapshots[++cursor].source,snapshots[cursor].focus);recordAction(action,previous);refresh('Next form restored');}
 }catch(error){announce(error.message);}}
 for(const name of ['split','merge','reset','undo','redo'])$(name).addEventListener('click',()=>act(name));
 $('drawing').addEventListener('click',e=>{const r=e.target.closest('[data-region]');if(r)select(Number(r.dataset.region));});
@@ -89,10 +108,15 @@ $('reference-source').addEventListener('change',e=>{const [kind,id]=e.target.val
 $('current-source').addEventListener('change',e=>{const [kind,id]=e.target.value.split(':');const form=kind==='preset'?presets[id]:savedForms.find(f=>f.id===id);if(form)commit(form.source,form.focus,'Current form B updated. Reference A stays fixed');});
 
 function drawChallenge(){
+  for(const button of document.querySelectorAll('[data-preset]'))button.disabled=!!run;
   $('challenge-count').textContent=completed.size?`(${completed.size}/3)` : '';
   $('challenge-panel').hidden=!run;$('workspace').classList.toggle('guide-active',!!run);
   if(!run)return;
   const lesson=challenges.find(c=>c.id===run.id),finished=run.step===lesson.steps.length;
+  const result=resultFor(run);
+  $('challenge-score').textContent=result?`${result.score}/100 points · 70 for completion + ${result.bonus} efficiency bonus · ${result.moves} structural moves`:run.attempt?`${run.attempt.moves} structural moves · perfect route: ${SCORE_RULES[run.id].minimumMoves} · no time limit`:'Restart to record a scored attempt. Earlier progress has no score.';
+  if(run.attempt&&!run.attempt.actions)$('challenge-score').textContent+=' · Recording limit reached. Restart to submit a score.';
+  $('challenge-results').hidden=!result;
   $('challenge-progress').textContent=finished?`${lesson.theme} / Completed ✓`:`${lesson.theme} / Step ${run.step+1} of ${lesson.steps.length}`;
   $('challenge-title').textContent=finished?lesson.title:lesson.steps[run.step].title;
   $('challenge-hint').textContent=finished?lesson.takeaway:lesson.steps[run.step].hint;
@@ -112,12 +136,14 @@ function openChallenges(){
 }
 function beginChallenge(id){
   const lesson=challenges.find(c=>c.id===id);const returnState=run?.returnState||workspaceSnapshot();
-  run={id,step:0,returnState};comparison={source:lesson.source,focus:lesson.focus};referenceName='Challenge starting form';
-  commit(lesson.source,lesson.focus,`Started: ${lesson.title}`);$('challenges-dialog').close();$('challenge-title').focus({preventScroll:true});$('challenge-panel').scrollIntoView({block:'start'});
+  run={id,step:0,returnState,attempt:{id:crypto.randomUUID(),version:RULE_VERSION,startedAt:Date.now(),finishedAt:null,moves:0,actions:[]}};comparison={source:lesson.source,focus:lesson.focus};referenceName='Challenge starting form';
+  scene=compute(lesson.source,lesson.focus);snapshots=[snapshot()];cursor=0;refresh(`Started: ${lesson.title}`);$('challenges-dialog').close();$('challenge-title').focus({preventScroll:true});$('challenge-panel').scrollIntoView({block:'start'});
 }
 $('challenges').addEventListener('click',openChallenges);
 $('challenge-restart').addEventListener('click',()=>beginChallenge(run.id));
-$('challenge-pin').addEventListener('click',()=>{comparison={source:challenges.find(c=>c.id==='focus').source,focus:run.anchor};referenceName='First small selection';run={...run,referenceReady:true};refresh('First small selection pinned as A. Choose another 8-unit region');});
+$('challenge-pin').addEventListener('click',()=>{recordAction('pin',scene.source);comparison={source:challenges.find(c=>c.id==='focus').source,focus:run.anchor};referenceName='First small selection';run={...run,referenceReady:true};refresh('First small selection pinned as A. Choose another 8-unit region');});
+$('scores').addEventListener('click',()=>scoreUI.open());
+$('challenge-results').addEventListener('click',()=>scoreUI.open(run?.attempt?.id));
 $('challenge-next').addEventListener('click',()=>{const index=challenges.findIndex(c=>c.id===run.id);if(index<challenges.length-1)beginChallenge(challenges[index+1].id);else openChallenges();});
 $('challenge-leave').addEventListener('click',()=>{const original=run.returnState;run=null;comparison=original.comparison;referenceName='Pinned form';commit(original.source,original.focus,'Returned to your original form');$('challenges').focus({preventScroll:true});});
 document.addEventListener('keydown',e=>{
@@ -166,7 +192,7 @@ function renderCollection(){
   for(const item of savedForms){
     const row=document.createElement('div'),info=document.createElement('div'),name=document.createElement('strong'),meta=document.createElement('p'),open=document.createElement('button'),remove=document.createElement('button');
     row.className='saved-item';name.textContent=item.name;meta.textContent=`${compute(item.source,item.focus).regions.length} regions · total 64`;
-    open.textContent='Open';open.setAttribute('aria-label',`Open ${item.name}`);
+    open.textContent='Open';open.disabled=!!run;open.title=run?'Return to your form to open a saved form.':'';open.setAttribute('aria-label',`Open ${item.name}`);
     open.addEventListener('click',()=>{commit(item.source,item.focus,`Opened “${item.name}”. Undo restores your previous form`);$('collection-dialog').close();});
     remove.textContent='×';remove.className='remove';remove.setAttribute('aria-label',`Remove ${item.name}`);
     remove.addEventListener('click',()=>{
@@ -207,5 +233,9 @@ try{const p=new URLSearchParams(location.hash.slice(1)),saved=restoredSession;
   }else if(saved?.version===1){const restored=cleanWorkspace(saved);scene=compute(restored.source,restored.focus);comparison=restored.comparison;run=cleanRun(saved.challenge);opening=run?'Your challenge is resumed':'Your last form is restored';}
   else scene=compute('L');
 }catch{scene=compute('L');comparison=null;run=null;opening='The saved or shared form was invalid. Starting with a whole';}
-snapshots=[snapshot()];refresh(opening);
+snapshots=[snapshot()];
+if(run?.attempt?.actions&&!run.attempt.finishedAt){try{const replay=replayRun(run.id,run.attempt.actions);scene=replay.scene;run={...run,...replay.run,attempt:{...run.attempt,moves:replay.moves}};snapshots=replay.history;cursor=replay.cursor;}catch{run.attempt=null;opening='Challenge restored. Restart to record a new score';}}
+refresh(opening);
+if(challenges.some(c=>c.id===entry.get('challenge')))beginChallenge(entry.get('challenge'));
+if(entry.has('scores'))scoreUI.open();
 if(matchMedia('(pointer: coarse)').matches)document.querySelector('.touch-hint').textContent='Tap any arc, then use Divide. The region picker also reaches the smallest pieces.';

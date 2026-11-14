@@ -4,3 +4,6 @@ SHA256SUMS.txt
 node_modules/
 tests/*.png
 *.log
+supabase/functions/isomass-leaderboard/lib/
+supabase/.temp/
+.env*

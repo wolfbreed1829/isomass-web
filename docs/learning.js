@@ -1,4 +1,5 @@
 import {compute} from './model.js';
+import {cleanAttempt} from './scoring.js';
 
 const balanced = 'BBLLBLL';
 const contrast = 'BBLLBBLLBLL';
@@ -73,5 +74,5 @@ export function cleanRun(value) {
   const lesson = challenges.find(c => c.id === value?.id);
   if (!lesson || !Number.isInteger(value.step) || value.step < 0 || value.step > lesson.steps.length) return null;
   if (value.id === 'focus' && value.step > 0 && ![12,13,14,15].includes(value.anchor)) return null;
-  try {return {id:value.id, step:value.step, anchor:value.anchor, referenceReady:value.referenceReady===true, returnState:cleanWorkspace(value.returnState)};} catch {return null;}
+  try {return {id:value.id, step:value.step, anchor:value.anchor, referenceReady:value.referenceReady===true, returnState:cleanWorkspace(value.returnState),attempt:cleanAttempt(value.attempt)};} catch {return null;}
 }
