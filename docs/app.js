@@ -48,8 +48,8 @@ function draw() {
 const announce=message=>{$('status').textContent=message;};
 const snapshot=()=>({source:scene.source,focus:scene.focus});
 function currentLink(){const u=new URL(location.href);u.search='';u.hash=new URLSearchParams({s:scene.source,f:String(scene.focus)}).toString();return u.href;}
-function refresh(message){draw();try{localStorage.setItem(STORAGE,JSON.stringify({version:1,...snapshot()}));saveAvailable=true;}catch{saveAvailable=false;}history.replaceState(null,'',currentLink());announce(message+(saveAvailable?' · Saved in this browser.':' · Storage unavailable; share a link to keep this form.'));}
-function commit(source,focus,message){const next=compute(source,focus);if(next.source!==scene.source){snapshots=snapshots.slice(0,cursor+1);snapshots.push({source:next.source,focus:next.focus});if(snapshots.length>512)snapshots.shift();cursor=snapshots.length-1;}else snapshots[cursor]={source:next.source,focus:next.focus};scene=next;refresh(message);}
+function refresh(message){draw();$('starter-note').textContent='Examples are editable. Undo brings your previous form back.';try{localStorage.setItem(STORAGE,JSON.stringify({version:1,...snapshot()}));saveAvailable=true;}catch{saveAvailable=false;}history.replaceState(null,'',currentLink());announce(message+(saveAvailable?' · Saved in this browser.':' · Storage unavailable; share a link to keep this form.'));}
+function commit(source,focus,message){const next=compute(source,focus);if(next.source!==scene.source||next.focus!==scene.focus){snapshots=snapshots.slice(0,cursor+1);snapshots.push({source:next.source,focus:next.focus});if(snapshots.length>512)snapshots.shift();cursor=snapshots.length-1;}scene=next;refresh(message);}
 function select(id){scene=compute(scene.source,id);snapshots[cursor]=snapshot();refresh(`Region ${scene.regions.findIndex(r=>r.id===scene.focus)+1} of ${scene.regions.length} selected · ${scene.active.length} connected ${scene.active.length===1?'region':'regions'}`);}
 function act(action){try{
   if(action==='split')commit(edit(scene.source,'split',scene.focus),scene.focus*2,'Divided. Capacity remains 64');
