@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseTree,encode,edit,compute} from '../docs/model.js';
+test('initial whole and conservation',()=>{const s=compute('L');assert.equal(s.mass,64);assert.equal(s.regions.length,1);assert.equal(s.samples.length,256);});
+test('reject invalid or overdeep serializations',()=>{for(const bad of ['',null,'X','BL','BLLL','B'.repeat(7)+'L'.repeat(8),'L'.repeat(128)])assert.throws(()=>parseTree(bad));});
+test('split and merge are inverse',()=>{assert.equal(edit('L','split',1),'BLL');assert.equal(edit('BLL','merge',1),'L');});
+test('transitive coupling and reflection',()=>{const s=compute('BBLLBLL',4);assert.deepEqual(s.active,[4,5,6,7]);assert.deepEqual(s.mirror,[7]);});
+test('unequal refinement changes coupled family and samples',()=>{const a=compute('BBLLBLL',4),b=compute(edit(a.source,'split',4),8);assert.equal(b.regions.length,5);assert.deepEqual(b.active,[8,9]);assert.notDeepEqual(a.samples,b.samples);});
+test('64 regions are bounded and cover the whole',()=>{let s='L';for(let i=0;i<6;i++)s='B'+s+s;const state=compute(s,64);assert.equal(state.regions.length,64);assert.equal(state.mass,64);assert.throws(()=>edit(s,'split',64));assert.equal(encode(parseTree(s)),s);});
+test('100 deterministic edits preserve coverage and valid serialization',()=>{let s='L';for(let i=0;i<100;i++){const state=compute(s),eligible=state.regions.filter(r=>r.depth<6);if(!eligible.length){s=edit(s,'merge',1);continue;}s=edit(s,'split',eligible[(i*17)%eligible.length].id);const next=compute(s);assert.equal(next.mass,64);assert.equal(encode(parseTree(s)),s);assert.equal(next.regions.reduce((x,r)=>{assert.equal(r.start,x);return x+r.width;},0),64);}});
+test('all 256 samples match independent direct formula',()=>{const s=compute('BBBLLLL',8);const expected=Array.from({length:256},(_,x)=>s.regions.reduce((sum,r)=>{let phase=0;phase=Math.trunc((x+3*r.start)*64/r.width)%256;return sum+Math.trunc((s.active.includes(r.id)?2:1)*r.width*(phase<128?phase:256-phase)/2);},0));assert.deepEqual(s.samples,expected);});
+test('unknown focus recovers to an existing leaf',()=>assert.equal(compute('BLL',999).focus,2));

@@ -1,0 +1,57 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#10171c">
+  <meta name="description" content="A hands-on playground for patterns and conservation. Split a whole, explore its connections, and save or share your discoveries.">
+  <meta property="og:title" content="Isomass — change the form, keep the whole">
+  <meta property="og:description" content="Explore patterns, start from examples, and share your own forms. Free to use in your browser.">
+  <title>Isomass — A conservation playground</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to the instrument</a>
+  <header class="topbar">
+    <a class="wordmark" href="./" aria-label="Isomass home">ISOMASS<span>A CONSERVATION PLAYGROUND</span></a>
+    <nav aria-label="History and sharing">
+      <div class="history-buttons"><button id="undo" title="Undo (Ctrl or Command Z)" aria-label="Undo last edit">↶ <span>Undo</span></button><button id="redo" title="Redo (Ctrl or Command Shift Z)" aria-label="Redo edit">↷ <span>Redo</span></button></div>
+      <button id="collection">Saved forms</button>
+      <button id="share" class="share">Share <span aria-hidden="true">↗</span></button>
+    </nav>
+  </header>
+  <main id="workspace" tabindex="-1">
+    <section class="introduction" aria-labelledby="headline">
+      <p class="eyebrow">01 / EXPLORE</p>
+      <h1 id="headline">Change the form.<br>Keep the whole.</h1>
+      <p class="instruction">Split a region into two. Watch the pattern change. However far you explore, the pieces always add up to <strong>64</strong>.</p>
+      <div class="starters"><h2>Try a starting form</h2><div class="preset-buttons"><button data-preset="balanced"><span aria-hidden="true">◷</span> Balanced</button><button data-preset="cascade"><span aria-hidden="true">◴</span> Cascade</button><button data-preset="contrast"><span aria-hidden="true">◒</span> Contrast</button></div><p id="starter-note">Examples are editable. Undo brings your previous form back.</p></div>
+      <div class="legend" aria-label="Color key"><p><i class="gold"></i> Selected region</p><p><i class="teal"></i> Connected, equal-size regions</p><p><i class="dot"></i> Reflected counterpart</p></div>
+      <button id="about" class="text-button">How does this work? <span aria-hidden="true">↗</span></button>
+    </section>
+    <section class="instrument" aria-label="Interactive partition and interference field">
+      <div class="instrument-heading"><div class="counts"><span><strong id="regions">1</strong> regions</span><span><strong id="coupled">1</strong> connected</span></div><span class="invariant">Total <strong>64</strong> <span aria-hidden="true">✓</span></span></div>
+      <div id="drawing"></div>
+      <p class="touch-hint">Select any arc, then use Divide. Small arcs? Use the region picker.</p>
+    </section>
+    <aside class="inspector" aria-label="Selected region">
+      <p class="eyebrow">02 / SHAPE</p>
+      <div class="region-picker"><label for="region-select">Selected region</label><div class="region-navigation"><button id="previous" aria-label="Select previous region">←</button><select id="region-select" aria-label="Select a region"></select><button id="next" aria-label="Select next region">→</button></div></div>
+      <div class="focus-readout"><p class="fraction"><span id="width">64</span><small> of 64</small></p><p class="depth">Region <span id="focus-id">1</span> · Depth <span id="depth">0</span> of 6</p></div>
+      <div class="edit-buttons"><button id="split" class="primary">Divide <span aria-hidden="true">＋</span></button><button id="merge">Rejoin family <span aria-hidden="true">−</span></button></div>
+      <p id="edit-preview" class="edit-preview"></p>
+      <p id="selection-summary" class="selection-summary"></p>
+      <div class="secondary-actions"><button id="save" class="text-button">Save this form <span aria-hidden="true">＋</span></button><button id="export" class="text-button">Export image <span aria-hidden="true">↓</span></button><button id="reset" class="text-button">Start from a whole <span aria-hidden="true">↺</span></button></div>
+      <details class="shortcuts"><summary>Keyboard shortcuts</summary><p><kbd>Space</kbd> divide · <kbd>Backspace</kbd> rejoin</p><p><kbd>↑</kbd> / <kbd>↓</kbd> select region</p><p><kbd>Ctrl / ⌘ Z</kbd> undo · <kbd>Shift Z</kbd> redo</p></details>
+    </aside>
+    <section class="field-copy" aria-labelledby="field-title"><p class="eyebrow">03 / NOTICE</p><h2 id="field-title">Same total. A different pattern.</h2><p id="field-explanation">Divide the whole to see how the pattern responds.</p><p class="field-note">The ring shows your pieces. The inner portrait and lower trace show the same combined wave, drawn two ways.</p></section>
+  </main>
+  <footer><p id="status" role="status" aria-live="polite">Preparing your instrument…</p><a href="https://github.com/wolfbreed1829/isomass-web" target="_blank" rel="noopener">ISOMASS / GITHUB <span aria-hidden="true">↗</span></a></footer>
+  <dialog id="about-dialog" aria-labelledby="about-title"><button class="close" data-close aria-label="Close explanation">×</button><p class="eyebrow">A QUICK GUIDE</p><h2 id="about-title">Three things to try.</h2><ol class="guide"><li><strong>Divide a piece.</strong><p>Its capacity halves: 64 becomes 32 + 32. The total stays 64. Rejoin brings the entire parent family back together.</p></li><li><strong>Change the focus.</strong><p>Choose an arc or use the region picker. Adjacent pieces of the same size connect in teal and receive twice the weight in the field.</p></li><li><strong>Compare a different structure.</strong><p>Try Balanced, then Cascade. The total is the same, but the scales and connections change the pattern. Undo lets you compare edits.</p></li></ol><p>Each region contributes a shifted triangular wave. The portrait wraps the resulting samples around a circle; the trace lays them out in a line. Amber dots mark equal-size regions reflected across the partition.</p><p class="fine">This browser edition computes locally and checks conservation at runtime. The original Idris proof and Flix/Bend runtimes belong to the separate desktop edition. This is a mathematical playground, not a physical simulation.</p><button data-close class="primary">Try it</button></dialog>
+  <dialog id="share-dialog" aria-labelledby="share-title"><button class="close" data-close aria-label="Close sharing">×</button><p class="eyebrow">SHARE A DISCOVERY</p><h2 id="share-title">Your form, in a link.</h2><p>Anyone opening this link starts with your current pieces and selected region. Their edits stay in their own browser.</p><label for="share-url">Link to this form</label><input id="share-url" readonly><button id="copy-link" class="primary">Copy link</button><p id="copy-status" role="status"></p></dialog>
+  <dialog id="collection-dialog" aria-labelledby="collection-title"><button class="close" data-close aria-label="Close saved forms">×</button><p class="eyebrow">YOUR COLLECTION</p><h2 id="collection-title">Keep a discovery.</h2><p class="collection-note">Saved on this device and browser. Share a link to keep a copy elsewhere.</p><form id="save-form"><label for="form-name">Name this form</label><div class="save-row"><input id="form-name" maxlength="48" placeholder="e.g. Quiet symmetry" required><button class="primary" type="submit">Save form</button></div></form><p id="collection-status" role="status"></p><div id="saved-list"></div></dialog>
+  <noscript><p class="noscript">Enable JavaScript to explore Isomass.</p></noscript>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
