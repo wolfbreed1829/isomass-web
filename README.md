@@ -10,6 +10,9 @@ A conservation playground. Divide a capacity of 64 into smaller regions, explore
 - **Undo** and **Redo** include edits and opening examples or saved forms. Ctrl/Command Z also works.
 - **Save this form** keeps a named copy in this browser. The collection supports up to 24 forms and undoing a removal.
 - **Share** copies a link containing the current structure and focus. **Export image** downloads a PNG.
+- **Compare forms** pins reference A while you edit B. Choose examples or saved forms for either panel, swap them, or pin B as the new reference. A comparison table reports sizes, connected regions, and exactly how many wave samples changed. Both plots use the same scale. Undo operates on B.
+- Sharing a comparison preserves both forms and their selections. Export produces a PNG of both panels.
+- **Guided challenges** teaches equal partitions, selecting a different family, and restoring connections. Each step checks the actual state, progress resumes after reload, and **Return to my form** restores your original workspace, including its reference.
 
 ## Hosting and development
 
@@ -21,8 +24,8 @@ The separate native desktop project uses Idris 2, Flix, and Bend. Its source rem
 
 ## Storage and sharing
 
-The current form and named collection live in browser storage. They do not sync between devices. Clearing site data removes them; share a link to keep a structure elsewhere. Shared links contain the partition and focus, not collection names. The application uses no third-party scripts or application backend.
+The current form, comparison, named collection, and challenge progress live in browser storage. They do not sync between devices. Clearing site data removes them; share a link to keep a structure elsewhere. Shared links contain the forms and their selections, not collection names or challenge progress. The application uses no third-party scripts or application backend.
 
 ## Validation
 
-Model checks cover serialization, conservation, depth limits, coupling, reflection, and all 256 field samples. Browser checks cover presets, immediate selection, region navigation, edit previews, keyboard history, saved-form persistence and removal recovery, shared-state restoration, image export, dialogs, and desktop/mobile layouts.
+The 16 automated checks cover serialization, conservation, depth limits, coupling, reflection, all 256 field samples, challenge transitions, comparison results, checkpoint validation, and distinct accessible plot labels. Browser checks additionally cover all three challenge flows, returning to the original workspace, reload recovery, choosing and swapping comparison forms, shared-state restoration, PNG export, existing controls, and desktop/mobile layouts.

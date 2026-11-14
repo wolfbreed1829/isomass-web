@@ -9,7 +9,7 @@
   <meta property="og:description" content="Explore patterns, start from examples, and share your own forms. Free to use in your browser.">
   <title>Isomass — A conservation playground</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=3">
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to the instrument</a>
@@ -21,6 +21,10 @@
       <button id="share" class="share">Share <span aria-hidden="true">↗</span></button>
     </nav>
   </header>
+  <section id="challenge-panel" class="challenge-panel" aria-labelledby="challenge-title" hidden>
+    <div class="challenge-copy"><p id="challenge-progress" class="eyebrow"></p><h2 id="challenge-title" tabindex="-1"></h2><p id="challenge-hint" aria-live="polite"></p><ol id="challenge-steps" aria-label="Challenge progress"></ol></div>
+    <div class="challenge-actions"><button id="challenge-pin" class="primary" hidden>Keep this selection in A</button><button id="challenge-next" class="primary" hidden>Next challenge →</button><button id="challenge-restart">Restart</button><button id="challenge-leave">Return to my form</button></div>
+  </section>
   <main id="workspace" tabindex="-1">
     <section class="introduction" aria-labelledby="headline">
       <p class="eyebrow">01 / EXPLORE</p>
@@ -31,9 +35,16 @@
       <button id="about" class="text-button">How does this work? <span aria-hidden="true">↗</span></button>
     </section>
     <section class="instrument" aria-label="Interactive partition and interference field">
+      <div class="view-tools"><button id="compare" aria-pressed="false">Compare forms</button><button id="challenges" class="primary">Guided challenges <span id="challenge-count"></span></button></div>
+      <div id="comparison-tools" class="comparison-tools" hidden><p>A stays fixed. Use the controls to edit B. Both views use the same scale.</p><div><button id="pin-current">Pin B as A</button><button id="swap-comparison">Swap A / B</button></div></div>
+      <div class="plot-pair">
+      <section id="reference-pane" class="reference-pane" aria-label="Reference form A" hidden><div class="pane-heading"><h2>A <span>Reference</span></h2><label for="reference-source" class="sr-only">Choose reference form A</label><select id="reference-source"></select></div><div id="reference-drawing"></div><p class="pane-note">Fixed reference · total 64</p></section>
+      <section class="live-pane" aria-label="Current form B"><div id="live-heading" class="pane-heading" hidden><h2>B <span>Your edits</span></h2><label for="current-source" class="sr-only">Choose current form B</label><select id="current-source"></select></div>
       <div class="instrument-heading"><div class="counts"><span><strong id="regions">1</strong> regions</span><span><strong id="coupled">1</strong> connected</span></div><span class="invariant">Total <strong>64</strong> <span aria-hidden="true">✓</span></span></div>
       <div id="drawing"></div>
       <p class="touch-hint">Select any arc, then use Divide. Small arcs? Use the region picker.</p>
+      </section></div>
+      <section id="comparison-results" class="comparison-results" aria-labelledby="comparison-title" hidden><div class="difference-copy"><h2 id="comparison-title">What changed?</h2><p id="comparison-summary" aria-live="polite"></p><p id="comparison-explanation"></p></div><table><caption class="sr-only">Reference A and current B measurements</caption><thead><tr><th scope="col">Measure</th><th scope="col">A · Reference</th><th scope="col">B · Current</th></tr></thead><tbody id="comparison-measures"></tbody></table></section>
     </section>
     <aside class="inspector" aria-label="Selected region">
       <p class="eyebrow">02 / SHAPE</p>
@@ -49,9 +60,10 @@
   </main>
   <footer><p id="status" role="status" aria-live="polite">Preparing your instrument…</p><a href="https://github.com/wolfbreed1829/isomass-web" target="_blank" rel="noopener">ISOMASS / GITHUB <span aria-hidden="true">↗</span></a></footer>
   <dialog id="about-dialog" aria-labelledby="about-title"><button class="close" data-close aria-label="Close explanation">×</button><p class="eyebrow">A QUICK GUIDE</p><h2 id="about-title">Three things to try.</h2><ol class="guide"><li><strong>Divide a piece.</strong><p>Its capacity halves: 64 becomes 32 + 32. The total stays 64. Rejoin brings the entire parent family back together.</p></li><li><strong>Change the focus.</strong><p>Choose an arc or use the region picker. Adjacent pieces of the same size connect in teal and receive twice the weight in the field.</p></li><li><strong>Compare a different structure.</strong><p>Try Balanced, then Cascade. The total is the same, but the scales and connections change the pattern. Undo lets you compare edits.</p></li></ol><p>Each region contributes a shifted triangular wave. The portrait wraps the resulting samples around a circle; the trace lays them out in a line. Amber dots mark equal-size regions reflected across the partition.</p><p class="fine">This browser edition computes locally and checks conservation at runtime. The original Idris proof and Flix/Bend runtimes belong to the separate desktop edition. This is a mathematical playground, not a physical simulation.</p><button data-close class="primary">Try it</button></dialog>
-  <dialog id="share-dialog" aria-labelledby="share-title"><button class="close" data-close aria-label="Close sharing">×</button><p class="eyebrow">SHARE A DISCOVERY</p><h2 id="share-title">Your form, in a link.</h2><p>Anyone opening this link starts with your current pieces and selected region. Their edits stay in their own browser.</p><label for="share-url">Link to this form</label><input id="share-url" readonly><button id="copy-link" class="primary">Copy link</button><p id="copy-status" role="status"></p></dialog>
+  <dialog id="share-dialog" aria-labelledby="share-title"><button class="close" data-close aria-label="Close sharing">×</button><p class="eyebrow">SHARE A DISCOVERY</p><h2 id="share-title">Your form, in a link.</h2><p id="share-description">Anyone opening this link starts with your current pieces and selected region. Their edits stay in their own browser.</p><label for="share-url">Link to this form</label><input id="share-url" readonly><button id="copy-link" class="primary">Copy link</button><p id="copy-status" role="status"></p></dialog>
+  <dialog id="challenges-dialog" aria-labelledby="challenges-title"><button class="close" data-close aria-label="Close challenges">×</button><p class="eyebrow">LEARN BY CHANGING</p><h2 id="challenges-title">Three small discoveries.</h2><p>Each challenge sets up its own form and checks your progress as you work. Return to your original form whenever you like.</p><div id="challenge-list"></div><p class="fine">Progress is saved in this browser when storage is available.</p></dialog>
   <dialog id="collection-dialog" aria-labelledby="collection-title"><button class="close" data-close aria-label="Close saved forms">×</button><p class="eyebrow">YOUR COLLECTION</p><h2 id="collection-title">Keep a discovery.</h2><p class="collection-note">Saved on this device and browser. Share a link to keep a copy elsewhere.</p><form id="save-form"><label for="form-name">Name this form</label><div class="save-row"><input id="form-name" maxlength="48" placeholder="e.g. Quiet symmetry" required><button class="primary" type="submit">Save form</button></div></form><p id="collection-status" role="status"></p><div id="saved-list"></div></dialog>
   <noscript><p class="noscript">Enable JavaScript to explore Isomass.</p></noscript>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=3"></script>
 </body>
 </html>

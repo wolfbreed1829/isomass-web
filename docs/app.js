@@ -1,37 +1,17 @@
 import { compute, edit } from './model.js';
+import {challenges, advanceChallenge, compareScenes, cleanForm, cleanWorkspace, cleanRun} from './learning.js';
 const $ = id => document.getElementById(id), STORAGE = 'isomass:browser:v1', COLLECTION = 'isomass:forms:v1';
 let scene, snapshots = [], cursor = 0, saveAvailable = true;
-const c = { bg:'#10171c', ink:'#e3e2d6', muted:'#8fa0a2', line:'#2b3a40', gold:'#e2b873', teal:'#68b1ae' };
-const polar = (r,a) => [400+r*Math.cos(a),325+r*Math.sin(a)];
-const point = p => p.map(v=>v.toFixed(3)).join(',');
-const text = (x,y,v,size=12,color=c.muted,anchor='middle') => `<text x="${x}" y="${y}" text-anchor="${anchor}" fill="${color}" font-size="${size}" font-family="Segoe UI,Arial,sans-serif">${v}</text>`;
-const line = (x,y,x2,y2,color=c.line) => `<path d="M${x},${y}L${x2},${y2}" stroke="${color}" fill="none"/>`;
-function arc(r,start,width) {
-  const a=start/64*Math.PI*2-Math.PI/2+.012,sweep=width/64*Math.PI*2-.024;
-  return `M${point(polar(r,a))}A${r},${r} 0 ${sweep>Math.PI?1:0} 1 ${point(polar(r,a+sweep))}`;
-}
+let comparison = null, referenceName = 'Pinned form', run = null;
+const PROGRESS = 'isomass:challenges:v1';
+let completed = new Set();
+try {const saved=JSON.parse(localStorage.getItem(PROGRESS)||'[]');if(Array.isArray(saved))completed=new Set(saved.filter(id=>challenges.some(c=>c.id===id)));} catch {}
+import {renderPlot} from "./plot.js";
 function draw() {
   const ringHadFocus = !!document.activeElement?.closest?.('[data-region]');
-  const s=scene,p=[];
-  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 820" role="group" aria-labelledby="plot-title plot-desc"><title id="plot-title">Isomass: ${s.regions.length} regions, total capacity ${s.mass}</title><desc id="plot-desc">Select an arc to focus it. Arrow up and down select other regions. Enter or Space selects a focused arc. Use Divide to split the selected region.</desc><rect width="800" height="820" fill="${c.bg}"/>`);
-  for(let i=0;i<64;i++){const a=i*2*Math.PI/64-Math.PI/2;p.push(line(...polar(299,a),...polar(i%8===0?309:303,a),i%8===0?'#64777d':c.line));}
-  for(const r of [76,134,192,291])p.push(`<circle cx="400" cy="325" r="${r}" fill="none" stroke="${c.line}"/>`);
-  p.push(line(89,325,711,325,'#1d2a30'),line(400,14,400,636,'#1d2a30'));
-  for(let layer=0;layer<13;layer++) {
-    let d='';for(let i=0;i<=256;i++){const j=i%256,r=68+layer*8+s.samples[j]/8192*(21+layer*2);d+=(i?'L':'M')+point(polar(r,j*2*Math.PI/256-Math.PI/2));}
-    p.push(`<path d="${d}Z" fill="none" stroke="${layer===12?c.gold:`rgb(${55+layer*5},${87+layer*5},${88+layer*3})`}" stroke-width="${layer===12?1.8:.8}"/>`);
-  }
-  p.push(`<circle cx="400" cy="325" r="52" fill="${c.bg}"/>`,text(400,339,s.mass,50,c.ink),text(400,361,'CONSERVED',9,c.gold));
-  for(const r of s.regions){const focused=r.id===s.focus,active=s.active.includes(r.id),radius=250+r.depth*4,d=arc(radius,r.start,r.width),a=(r.start+r.width/2)*2*Math.PI/64-Math.PI/2,n=polar(radius,a),label=polar(285,a);
-    p.push(`<g class="region" role="button" tabindex="${focused?0:-1}" data-region="${r.id}" aria-label="Region ${s.regions.indexOf(r)+1} of ${s.regions.length}, capacity ${r.width}, depth ${r.depth}" aria-pressed="${focused}"><title>Region ${s.regions.indexOf(r)+1}: ${r.width} of 64. Select to edit.</title><path d="${d}" fill="none" stroke="transparent" stroke-width="52"/><path class="region-band" d="${d}" fill="none" stroke="${focused?c.gold:active?c.teal:'#60777c'}" stroke-width="${focused?12:active?9:5}"/><circle cx="${n[0]}" cy="${n[1]}" r="${focused?4.5:2.5}" fill="${c.bg}"/></g>`);
-    if(s.regions.length<=32)p.push(text(label[0],label[1]+4,r.width,11,focused?c.gold:c.muted));
-    if(s.mirror.includes(r.id)&&!focused){const m=polar(radius-18,a);p.push(`<circle cx="${m[0]}" cy="${m[1]}" r="3" fill="${c.gold}"/>`);}
-  }
-  const x=40,y=686,w=720,h=91;p.push(text(x,662,'INTERFERENCE / 256 SAMPLES',9,c.muted,'start'));
-  for(let i=0;i<=8;i++)p.push(line(x+w*i/8,y,x+w*i/8,y+h));p.push(line(x,y,x+w,y),line(x,y+h,x+w,y+h));
-  const d=s.samples.map((v,i)=>(i?'L':'M')+(x+w*i/255).toFixed(3)+','+(y+h-v*h/8192).toFixed(3)).join('');
-  p.push(`<path d="${d}" stroke="${c.teal}" stroke-width="1.5" fill="none"/>`,text(x,797,'0',9,c.muted,'start'),text(x+w,797,'256',9,c.muted,'end'),'</svg>');
-  $('drawing').innerHTML=p.join('');
+  const s=scene;
+  $('drawing').innerHTML=renderPlot(s,{id:'live'});
+
   const selected=s.regions.find(r=>r.id===s.focus);
   for(const [id,v] of Object.entries({regions:s.regions.length,coupled:s.active.length,'focus-id':s.regions.indexOf(selected)+1,width:selected.width,depth:selected.depth}))$(id).textContent=v;
   $('region-select').replaceChildren(...s.regions.map((r,i)=>new Option(`Region ${i+1} · ${r.width}/64`,String(r.id),false,r.id===s.focus)));
@@ -44,11 +24,22 @@ function draw() {
   $('selection-summary').textContent=s.regions.length===1?'The whole is selected. Divide it to begin, or open a starting form.':s.active.length===s.regions.length?`All ${s.active.length} regions are connected. Divide one to introduce a different scale.`:`${s.active.length} ${s.active.length===1?'region receives':'connected regions receive'} twice the weight in the field. Select another size to emphasize a different family.`;
   $('field-explanation').textContent=s.regions.length===1?'Start with Divide. The two halves still add up to 64, but their waves create a new pattern.':s.active.length===s.regions.length?'Every piece has the same size and belongs to one connected family. Try dividing just one piece, then selecting a larger neighbor.':`You now have ${new Set(s.regions.map(r=>r.width)).size} different region sizes. Try selecting another size: the total stays 64 while a different family shapes the field.`;
   if(ringHadFocus)$('drawing').querySelector(`[data-region="${s.focus}"]`)?.focus({preventScroll:true});
+  drawComparison();
+  drawChallenge();
 }
 const announce=message=>{$('status').textContent=message;};
 const snapshot=()=>({source:scene.source,focus:scene.focus});
-function currentLink(){const u=new URL(location.href);u.search='';u.hash=new URLSearchParams({s:scene.source,f:String(scene.focus)}).toString();return u.href;}
-function refresh(message){draw();$('starter-note').textContent='Examples are editable. Undo brings your previous form back.';try{localStorage.setItem(STORAGE,JSON.stringify({version:1,...snapshot()}));saveAvailable=true;}catch{saveAvailable=false;}history.replaceState(null,'',currentLink());announce(message+(saveAvailable?' · Saved in this browser.':' · Storage unavailable; share a link to keep this form.'));}
+const workspaceSnapshot=()=>({...snapshot(),comparison:comparison?{...comparison}:null});
+function currentLink(){const u=new URL(location.href);u.search='';const p=new URLSearchParams({s:scene.source,f:String(scene.focus)});if(comparison){p.set('a',comparison.source);p.set('af',String(comparison.focus));}u.hash=p.toString();return u.href;}
+function refresh(message){
+  if(run){const previous=run;run=advanceChallenge(run,scene);if(previous.step!==run.step){
+    const lesson=challenges.find(c=>c.id===run.id);
+    if(run.step===lesson.steps.length){completed.add(run.id);try{localStorage.setItem(PROGRESS,JSON.stringify([...completed]));}catch{}message=`Challenge complete: ${lesson.title}`;}
+  }}
+  draw();$('starter-note').textContent='Examples are editable. Undo brings your previous form back.';
+  try{localStorage.setItem(STORAGE,JSON.stringify({version:1,...workspaceSnapshot(),challenge:run}));saveAvailable=true;}catch{saveAvailable=false;}
+  history.replaceState(null,'',currentLink());announce(message+(saveAvailable?' · Saved in this browser.':' · Storage unavailable; share a link to keep this form.'));
+}
 function commit(source,focus,message){const next=compute(source,focus);if(next.source!==scene.source||next.focus!==scene.focus){snapshots=snapshots.slice(0,cursor+1);snapshots.push({source:next.source,focus:next.focus});if(snapshots.length>512)snapshots.shift();cursor=snapshots.length-1;}scene=next;refresh(message);}
 function select(id){scene=compute(scene.source,id);snapshots[cursor]=snapshot();refresh(`Region ${scene.regions.findIndex(r=>r.id===scene.focus)+1} of ${scene.regions.length} selected · ${scene.active.length} connected ${scene.active.length===1?'region':'regions'}`);}
 function act(action){try{
@@ -67,6 +58,68 @@ $('region-select').addEventListener('change',e=>select(Number(e.target.value)));
 document.querySelector('.skip-link').addEventListener('click',e=>{e.preventDefault();$('workspace').focus();$('workspace').scrollIntoView({block:'start'});});
 const presets={balanced:{source:'BBLLBLL',focus:4,name:'Balanced',note:'Four equal pieces form one connected family. Divide one to break the symmetry.'},cascade:{source:'BBBBLLLLL',focus:16,name:'Cascade',note:'A chain of smaller pieces. Select a larger neighbor to change the field.'},contrast:{source:'BBLLBBLLBLL',focus:4,name:'Contrast',note:'Two scales, two families. Switch between the larger and smaller regions.'}};
 for(const button of document.querySelectorAll('[data-preset]'))button.addEventListener('click',()=>{const p=presets[button.dataset.preset];commit(p.source,p.focus,`${p.name} opened. Undo restores your previous form`);$('starter-note').textContent=p.note;});
+
+function drawComparison(){
+  const enabled=!!comparison;
+  $('workspace').classList.toggle('comparing',enabled);
+  for(const id of ['reference-pane','live-heading','comparison-tools','comparison-results'])$(id).hidden=!enabled;
+  $('compare').setAttribute('aria-pressed',String(enabled));$('compare').textContent=enabled?'Exit comparison':'Compare forms';
+  $('export').textContent=enabled?'Export comparison ↓':'Export image ↓';
+  $('save').textContent=enabled?'Save current form B ＋':'Save this form ＋';
+  if(!enabled)return;
+  const a=compute(comparison.source,comparison.focus),b=scene,result=compareScenes(a,b);
+  $('reference-drawing').innerHTML=renderPlot(a,{id:'reference',interactive:false});
+  const options=[new Option(referenceName,'current',true,true),...Object.entries(presets).map(([id,p])=>new Option(p.name,`preset:${id}`)),...savedForms.map(f=>new Option(`Saved: ${f.name}`,`saved:${f.id}`))];
+  $('reference-source').replaceChildren(...options);
+  $('current-source').replaceChildren(new Option('Current form','current',true,true),...Object.entries(presets).map(([id,p])=>new Option(p.name,`preset:${id}`)),...savedForms.map(f=>new Option(`Saved: ${f.name}`,`saved:${f.id}`)));
+  for(const id of ['pin-current','swap-comparison','reference-source','current-source'])$(id).disabled=!!run;
+  $('comparison-tools').querySelector('p').textContent=run?'The challenge pins A for you. Edit B with the controls. Both views use the same scale.':'A stays fixed. Use the controls to edit B. Both views use the same scale.';
+  $('comparison-summary').textContent=`${result.changedSamples} of 256 wave samples changed · both totals remain 64.`;
+  $('comparison-explanation').textContent=result.explanation;
+  const sizes=s=>[...new Set(s.regions.map(r=>r.width))].sort((x,y)=>x-y).join(', ');
+  const width=s=>s.regions.find(r=>r.id===s.focus).width;
+  const rows=[['Regions',a.regions.length,b.regions.length],['Region sizes',sizes(a),sizes(b)],['Selected capacity',width(a),width(b)],['Connected regions',a.active.length,b.active.length],['Total capacity',a.mass,b.mass]];
+  $('comparison-measures').innerHTML=rows.map(([label,x,y])=>`<tr><th scope="row">${label}</th><td>${x}</td><td>${y}</td></tr>`).join('');
+}
+function guideReference(){const lesson=challenges.find(c=>c.id===run.id);return {source:lesson.source,focus:run.id==='focus'&&run.step>0&&run.referenceReady?run.anchor:lesson.focus};}
+$('compare').addEventListener('click',()=>{comparison=comparison?null:run?guideReference():cleanForm(scene);referenceName=run?'Challenge reference':'Pinned form';refresh(comparison?'Reference A pinned. Edit B to compare':'Returned to a single form');});
+$('pin-current').addEventListener('click',()=>{comparison=cleanForm(scene);referenceName='Pinned form';refresh('Current form pinned as reference A');});
+$('swap-comparison').addEventListener('click',()=>{const previous=comparison;comparison=cleanForm(scene);referenceName='Previous current form';commit(previous.source,previous.focus,'A and B swapped. Undo affects B');});
+$('reference-source').addEventListener('change',e=>{const [kind,id]=e.target.value.split(':');const form=kind==='preset'?presets[id]:savedForms.find(f=>f.id===id);if(!form)return;comparison=cleanForm(form);referenceName=form.name;refresh('Reference A updated. Current form B is unchanged');});
+$('current-source').addEventListener('change',e=>{const [kind,id]=e.target.value.split(':');const form=kind==='preset'?presets[id]:savedForms.find(f=>f.id===id);if(form)commit(form.source,form.focus,'Current form B updated. Reference A stays fixed');});
+
+function drawChallenge(){
+  $('challenge-count').textContent=completed.size?`(${completed.size}/3)` : '';
+  $('challenge-panel').hidden=!run;$('workspace').classList.toggle('guide-active',!!run);
+  if(!run)return;
+  const lesson=challenges.find(c=>c.id===run.id),finished=run.step===lesson.steps.length;
+  $('challenge-progress').textContent=finished?`${lesson.theme} / Completed ✓`:`${lesson.theme} / Step ${run.step+1} of ${lesson.steps.length}`;
+  $('challenge-title').textContent=finished?lesson.title:lesson.steps[run.step].title;
+  $('challenge-hint').textContent=finished?lesson.takeaway:lesson.steps[run.step].hint;
+  const waitingToPin=run.id==='focus'&&run.step===1&&!run.referenceReady;
+  $('challenge-pin').hidden=!waitingToPin;
+  if(waitingToPin){$('challenge-title').textContent='Notice the changed wave';$('challenge-hint').textContent='Only your selection changed, but a different family now shapes the wave. Keep this selection in A before comparing another member of the same family.';}
+  $('challenge-steps').replaceChildren(...lesson.steps.map((step,i)=>{const li=document.createElement('li');li.textContent=step.title;li.dataset.step=String(i+1);if(i<run.step)li.className='done';if(i===run.step)li.setAttribute('aria-current','step');return li;}));
+  $('challenge-next').hidden=!finished;$('challenge-next').textContent=challenges.indexOf(lesson)===challenges.length-1?'More challenges':'Next challenge →';
+}
+function openChallenges(){
+  $('challenge-list').replaceChildren(...challenges.map((lesson,i)=>{
+    const card=document.createElement('section'),label=document.createElement('p'),title=document.createElement('h3'),intro=document.createElement('p'),button=document.createElement('button');
+    card.className='challenge-card';label.className='eyebrow';label.textContent=`0${i+1} / ${lesson.theme}${completed.has(lesson.id)?' · Completed ✓':''}`;
+    title.textContent=lesson.title;intro.textContent=lesson.intro;button.textContent=completed.has(lesson.id)?'Try again':'Start challenge';button.dataset.challenge=lesson.id;
+    button.addEventListener('click',()=>beginChallenge(lesson.id));card.append(label,title,intro,button);return card;
+  }));$('challenges-dialog').showModal();
+}
+function beginChallenge(id){
+  const lesson=challenges.find(c=>c.id===id);const returnState=run?.returnState||workspaceSnapshot();
+  run={id,step:0,returnState};comparison={source:lesson.source,focus:lesson.focus};referenceName='Challenge starting form';
+  commit(lesson.source,lesson.focus,`Started: ${lesson.title}`);$('challenges-dialog').close();$('challenge-title').focus({preventScroll:true});$('challenge-panel').scrollIntoView({block:'start'});
+}
+$('challenges').addEventListener('click',openChallenges);
+$('challenge-restart').addEventListener('click',()=>beginChallenge(run.id));
+$('challenge-pin').addEventListener('click',()=>{comparison={source:challenges.find(c=>c.id==='focus').source,focus:run.anchor};referenceName='First small selection';run={...run,referenceReady:true};refresh('First small selection pinned as A. Choose another 8-unit region');});
+$('challenge-next').addEventListener('click',()=>{const index=challenges.findIndex(c=>c.id===run.id);if(index<challenges.length-1)beginChallenge(challenges[index+1].id);else openChallenges();});
+$('challenge-leave').addEventListener('click',()=>{const original=run.returnState;run=null;comparison=original.comparison;referenceName='Pinned form';commit(original.source,original.focus,'Returned to your original form');$('challenges').focus({preventScroll:true});});
 document.addEventListener('keydown',e=>{
   if(document.querySelector('dialog[open]')||e.target.matches('input,textarea,select')||e.target.isContentEditable)return;
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();act(e.shiftKey?'redo':'undo');return;}
@@ -81,13 +134,16 @@ document.addEventListener('keydown',e=>{
 $('about').addEventListener('click',()=>$('about-dialog').showModal());
 for(const button of document.querySelectorAll('[data-close]'))button.addEventListener('click',()=>button.closest('dialog').close());
 for(const dialog of document.querySelectorAll('dialog'))dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
-$('share').addEventListener('click',()=>{$('share-url').value=currentLink();$('copy-status').textContent='';$('share-dialog').showModal();});
+$('share').addEventListener('click',()=>{$('share-url').value=currentLink();$('copy-status').textContent='';$('share-title').textContent=comparison?'Both forms, in a link.':'Your form, in a link.';$('share-description').textContent=comparison?'This link preserves reference A and current form B, including both selections. Visitors can edit B independently. Challenge progress stays in your browser.':'Anyone opening this link starts with your current pieces and selected region. Their edits stay in their own browser.';$('share-dialog').showModal();});
 $('share-url').addEventListener('click',()=>$('share-url').select());
 $('copy-link').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(currentLink());$('copy-status').textContent='Copied. Anyone with the link can explore this form.';}catch{$('share-url').focus();$('share-url').select();$('copy-status').textContent='Select and copy the link above.';}});
 async function exportImage(){
   $('export').disabled=true;
-  try{const svg=$('drawing').querySelector('svg').cloneNode(true);svg.setAttribute('width','1600');svg.setAttribute('height','1640');const source=new XMLSerializer().serializeToString(svg),url=URL.createObjectURL(new Blob([source],{type:'image/svg+xml;charset=utf-8'}));
-    try{const img=new Image();img.src=url;await img.decode();const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=1640;canvas.getContext('2d').drawImage(img,0,0);const png=await new Promise(r=>canvas.toBlob(r,'image/png'));if(!png)throw new Error('No image');const download=URL.createObjectURL(png),a=document.createElement('a');a.href=download;a.download=`isomass-${scene.regions.length}-regions.png`;a.click();setTimeout(()=>URL.revokeObjectURL(download),10000);announce('Image exported.');}finally{URL.revokeObjectURL(url);}
+  try{const isPair=!!comparison,height=isPair?900:1640;let source;
+    if(isPair){const panel=(s,id,x)=>renderPlot(s,{id,interactive:false}).replace('<svg ',`<svg x="${x}" y="60" width="800" height="820" `);source=`<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900"><rect width="1600" height="900" fill="#10171c"/><g fill="#e3e2d6" font-family="Arial,sans-serif" font-size="24"><text x="40" y="40">A · Reference</text><text x="840" y="40">B · Current</text></g>${panel(compute(comparison.source,comparison.focus),'export-a',0)}${panel(scene,'export-b',800)}</svg>`;}
+    else{const svg=$('drawing').querySelector('svg').cloneNode(true);svg.setAttribute('width','1600');svg.setAttribute('height','1640');source=new XMLSerializer().serializeToString(svg);}
+    const url=URL.createObjectURL(new Blob([source],{type:'image/svg+xml;charset=utf-8'}));
+    try{const img=new Image();img.src=url;await img.decode();const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=height;canvas.getContext('2d').drawImage(img,0,0);const png=await new Promise(r=>canvas.toBlob(r,'image/png'));if(!png)throw new Error('No image');const download=URL.createObjectURL(png),a=document.createElement('a');a.href=download;a.download=isPair?'isomass-comparison.png':`isomass-${scene.regions.length}-regions.png`;a.click();setTimeout(()=>URL.revokeObjectURL(download),10000);announce(isPair?'Comparison image exported.':'Image exported.');}finally{URL.revokeObjectURL(url);}
   }catch{announce('Image export was unavailable. Use Share this form to keep the structure.');}finally{$('export').disabled=false;}
 }
 $('export').addEventListener('click',exportImage);
@@ -138,9 +194,18 @@ $('save-form').addEventListener('submit',e=>{
   if(writeCollection([item,...savedForms])){renderCollection();$('form-name').value='';$('collection-status').textContent=`Saved “${name}” on this device.`;}
 });
 updateCollectionCount();
-window.addEventListener('hashchange',()=>{try{const p=new URLSearchParams(location.hash.slice(1));if(!p.has('s'))return;scene=compute(p.get('s'),Number(p.get('f')||1));snapshots=[snapshot()];cursor=0;refresh('Shared form opened');}catch{announce('That link contains an invalid partition. Your current form is unchanged.');}});
+function readShared(p){return cleanWorkspace({source:p.get('s'),focus:Number(p.get('f')||1),comparison:p.has('a')?{source:p.get('a'),focus:Number(p.get('af')||1)}:null});}
+window.addEventListener('hashchange',()=>{try{const p=new URLSearchParams(location.hash.slice(1));if(!p.has('s'))return;const shared=readShared(p);scene=compute(shared.source,shared.focus);comparison=shared.comparison;referenceName='Shared reference';run=null;snapshots=[snapshot()];cursor=0;refresh('Shared form opened');}catch{announce('That link contains an invalid partition. Your current form is unchanged.');}});
 let opening='The whole is yours. Divide a region to begin';
-try{const p=new URLSearchParams(location.hash.slice(1));if(p.has('s')){scene=compute(p.get('s'),Number(p.get('f')||1));opening='Shared form opened';}else{const saved=JSON.parse(localStorage.getItem(STORAGE)||'null');scene=saved?.version===1?compute(saved.source,saved.focus):compute('L');if(saved)opening='Your last form is restored';}}
-catch{scene=compute('L');opening='The saved or shared form was invalid. Starting with a whole';}
+let restoredSession=null;
+try{restoredSession=JSON.parse(localStorage.getItem(STORAGE)||'null');}catch{}
+try{const p=new URLSearchParams(location.hash.slice(1)),saved=restoredSession;
+  if(p.has('s')){const shared=readShared(p);scene=compute(shared.source,shared.focus);comparison=shared.comparison;referenceName='Shared reference';
+    // Resume a guide only when this is the exact last workspace in this browser.
+    if(saved?.version===1&&saved.source===shared.source&&saved.focus===shared.focus&&JSON.stringify(saved.comparison||null)===JSON.stringify(shared.comparison))run=cleanRun(saved.challenge);
+    opening=run?'Your challenge is resumed':'Shared form opened';
+  }else if(saved?.version===1){const restored=cleanWorkspace(saved);scene=compute(restored.source,restored.focus);comparison=restored.comparison;run=cleanRun(saved.challenge);opening=run?'Your challenge is resumed':'Your last form is restored';}
+  else scene=compute('L');
+}catch{scene=compute('L');comparison=null;run=null;opening='The saved or shared form was invalid. Starting with a whole';}
 snapshots=[snapshot()];refresh(opening);
 if(matchMedia('(pointer: coarse)').matches)document.querySelector('.touch-hint').textContent='Tap any arc, then use Divide. The region picker also reaches the smallest pieces.';
